@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Download, Home, Sparkles } from "lucide-react";
+import html2pdf from "html2pdf.js";
 import { MIDomain } from "@/data/miQuestions";
 
 interface DomainScore {
@@ -18,6 +19,7 @@ const Result = () => {
   const [loading, setLoading] = useState(true);
   const [submission, setSubmission] = useState<any>(null);
   const [scores, setScores] = useState<DomainScore[]>([]);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -95,6 +97,39 @@ const Result = () => {
     if (rank === 0) return "bg-gradient-hero";
     if (rank === 1) return "bg-gradient-warm";
     return "bg-gradient-success";
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!id) return;
+    
+    setDownloading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-pdf', {
+        body: { submissionId: id }
+      });
+
+      if (error) throw error;
+
+      // Convert HTML to PDF using html2pdf
+      const element = document.createElement('div');
+      element.innerHTML = data.html;
+      
+      const opt = {
+        margin: 0,
+        filename: data.filename,
+        image: { type: 'jpeg' as const, quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
+      };
+
+      await html2pdf().set(opt).from(element).save();
+      toast.success('PDF downloaded successfully!');
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast.error('Failed to download PDF. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   if (loading) {
@@ -207,10 +242,21 @@ const Result = () => {
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button
             size="lg"
+            onClick={handleDownloadPDF}
+            disabled={downloading}
             className="bg-gradient-hero hover:opacity-90 text-lg px-8 py-6 rounded-xl shadow-medium"
           >
-            <Download className="mr-2" />
-            Download PDF Report
+            {downloading ? (
+              <>
+                <Loader2 className="mr-2 animate-spin" />
+                Generating PDF...
+              </>
+            ) : (
+              <>
+                <Download className="mr-2" />
+                Download PDF Report
+              </>
+            )}
           </Button>
           <Link to="/">
             <Button
